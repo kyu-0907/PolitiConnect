@@ -11,7 +11,7 @@ import java.lang.annotation.*;
 @Target({ElementType.FIELD})
 @Retention(RetentionPolicy.RUNTIME)
 public @interface PasswordConstraint {
-    String messsage() default "비밀번호 형식이 올바르지 않습니다. (영문 대/소문자, 특수문자 중 2가지 이상 조합, 10 ~ 16자)";
+    String message() default "비밀번호 형식이 올바르지 않습니다. (영문 대/소문자, 특수문자 중 2가지 이상 조합, 10 ~ 16자)";
     Class<?>[] groups() default {};
     Class<? extends Payload>[] payload() default {};
 }

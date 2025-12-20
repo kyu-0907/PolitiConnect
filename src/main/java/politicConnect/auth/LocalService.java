@@ -2,6 +2,8 @@ package politicConnect.auth;
 
 
 import lombok.RequiredArgsConstructor;
+import org.springframework.http.ResponseCookie;
+import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.config.annotation.authentication.builders.AuthenticationManagerBuilder;
@@ -10,23 +12,21 @@ import org.springframework.security.core.userdetails.UsernameNotFoundException;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import politicConnect.domain.Provider;
-import politicConnect.domain.Role;
-import politicConnect.domain.User;
-import politicConnect.dto.LocalLoginRequest;
-import politicConnect.dto.LocalSignupRequest;
-import politicConnect.dto.TokenDto;
-import politicConnect.repository.UserRepository;
+import politicConnect.user.Role;
+import politicConnect.user.User;
+import politicConnect.user.UserRepository;
 
 @Service
 @RequiredArgsConstructor
+
 @Transactional(readOnly = true)
 public class LocalService {
 
     private final UserRepository userRepository;
     private final PasswordEncoder passwordEncoder; // BCryptPasswordEncoder 등록 가정
     private final JwtProvider jwtProvider;
-    private final AuthenticationManagerBuilder authenticationManagerBuilder;
+    private final AuthenticationManager authenticationManager;
+    private final RefreshTokenRepository refreshTokenRepository;
 
 
     /**
@@ -86,16 +86,21 @@ public class LocalService {
 
         try {
             Authentication authentication =
-                    authenticationManagerBuilder.getObject().authenticate(token);
+                    authenticationManager.authenticate(token);
 
             /**
              * authenticate 메서드는usernamePasswordAuthentication
              * 을 인자가 2개(id, pw)인 미인증 상태에서
              * 인자가 3개인 인증된 authentication 으로 변환한다
             */
+            TokenDto tokenDto = jwtProvider.generateTokenDto(authentication);
 
-            //이거 바꿔야댐(dto로 주는거 아님)
-            return jwtProvider.generateTokenDto(authentication);
+            // 3. Refresh Token -> Redis 저장
+            RefreshToken refreshToken = new RefreshToken(authentication.getName(), tokenDto.getRefreshToken());
+            refreshTokenRepository.save(refreshToken);
+
+
+            return tokenDto;
 
 
         } catch (BadCredentialsException e) {
@@ -104,6 +109,46 @@ public class LocalService {
             throw new RuntimeException("존재하지 않는 아이디입니다");
         }
     }
+
+    @Transactional
+    public TokenDto reissue(String refreshTokenInCookie) {
+        // 1. 토큰 유효성 검증
+        if (!jwtProvider.validateToken(refreshTokenInCookie)) {
+            throw new RuntimeException("유효하지 않은 Refresh Token입니다.");
+        }
+
+        // 2. 토큰에서 User ID 추출 (Subject)
+        Authentication authentication = jwtProvider.getAuthentication(refreshTokenInCookie);
+        String userId = authentication.getName();
+
+        // 3. Redis 조회
+        RefreshToken redisToken = refreshTokenRepository.findById(userId)
+                .orElseThrow(() -> new RuntimeException("로그아웃 되었습니다."));
+
+        // 4. [보안] 쿠키 값 vs Redis 값 비교 (탈취 감지)
+        if (!redisToken.getToken().equals(refreshTokenInCookie)) {
+            throw new RuntimeException("토큰 정보가 일치하지 않습니다.");
+        }
+
+        // 5. 새 토큰 생성 및 Redis 업데이트 (Rotation)
+        TokenDto newTokenDto = jwtProvider.generateTokenDto(authentication);
+        refreshTokenRepository.save(new RefreshToken(userId, newTokenDto.getRefreshToken()));
+
+        return newTokenDto;
+    }
+
+    @Transactional
+    public void logout(String refreshTokenInCookie) {
+        if(jwtProvider.validateToken(refreshTokenInCookie)) {
+            String userId = jwtProvider.getUserIdFromToken(refreshTokenInCookie); // getAuthentication().getName()과 동일
+            refreshTokenRepository.deleteById(userId);
+        }
+    }
+
+
+
+
+
 
     @Transactional(readOnly = true)
     public boolean isLocalLoginIdDuplicated(String localLoginId) {
@@ -128,10 +173,6 @@ public class LocalService {
         }
         return userRepository.existsByEmail(email);
     }
+    }
 
 
-
-
-
-
-}

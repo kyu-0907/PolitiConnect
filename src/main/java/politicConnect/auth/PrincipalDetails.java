@@ -1,12 +1,10 @@
 package politicConnect.auth;
 
-import lombok.AllArgsConstructor;
 import lombok.Getter;
-import lombok.RequiredArgsConstructor;
 import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.security.oauth2.core.user.OAuth2User;
-import politicConnect.domain.User;
+import politicConnect.user.User;
 
 
 import java.util.ArrayList;
@@ -45,7 +43,16 @@ public class PrincipalDetails implements UserDetails, OAuth2User {
     public String getPassword() { return user.getLocalLoginPassword(); }
 
     @Override
-    public String getUsername() { return user.getEmail(); } // 보통 이메일을 ID로 씀
+    public String getUsername() {
+        // 일반 로그인 사용자 (localLoginId 있음)
+        String localId = user.getLocalLoginId();
+        if (localId != null) {
+            return localId;
+        }
+
+        // 소셜 로그인 사용자 (localLoginId 없음 -> providerId 대체)
+        // 여기서 null을 리턴하면 에러가 납니다!
+        return getName(); }
 
     @Override
     public boolean isAccountNonExpired() { return true; }
@@ -68,6 +75,6 @@ public class PrincipalDetails implements UserDetails, OAuth2User {
 
     @Override
     public String getName() {
-        return user.getId().toString(); // 혹은 user.getName()
+        return String.valueOf(user.getId());
     }
 }

@@ -12,7 +12,14 @@ services:
     volumes:
       - mysql-data:/var/lib/mysql
 
-  upfit:
+
+  redis:
+    image: redis:alpine
+    container_name: redis-container
+    ports:
+      - "6379:6379"
+
+  politicconnect:
     build:
       context: .
       dockerfile: Dockerfile
@@ -27,6 +34,7 @@ services:
       SPRING_DATASOURCE_URL: ${DB_URL}
       SPRING_DATASOURCE_USERNAME: ${DB_USERNAME}
       SPRING_DATASOURCE_PASSWORD: ${DB_PASSWORD}
+
 
 
 volumes:
