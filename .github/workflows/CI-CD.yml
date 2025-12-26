@@ -47,13 +47,16 @@ jobs:
           key: ${{ secrets.SSH_PRIVATE_KEY }}
           envs: GITHUB_SHA
           script: |
-            # (1) 기존 컨테이너 중지 및 삭제 (pc_app은 docker-compose의 container_name)
-            sudo docker stop pc_app || true
-            sudo docker rm pc_app || true
-
-            # (2) 서버에 .env 파일 생성 (실행 시 필요한 변수 주입)
-            # 주의: 첫 줄은 > (덮어쓰기), 그 다음부터는 >> (이어쓰기)
-            echo "DB_URL=${{ secrets.DB_URL }}" > .env
+            # (1) 기존 컨테이너 중지/삭제 (에러 무시)
+            # 프로젝트 이름을 명시하지 않으면 못 찾을 수 있으므로 강제 삭제 시도
+            sudo docker rm -f pc_app || true
+            
+            # (2) .env 파일 생성
+            # 🚨 [추가됨] 프로젝트 이름을 환경변수 파일에 고정 (이게 핵심 해결책!)
+            echo "COMPOSE_PROJECT_NAME=pc" > .env
+            
+            # 나머지 변수들 (이어쓰기 >>)
+            echo "DB_URL=${{ secrets.DB_URL }}" >> .env
             echo "DB_USERNAME=${{ secrets.DB_USERNAME }}" >> .env
             echo "DB_PASSWORD=${{ secrets.DB_PASSWORD }}" >> .env
             echo "JWT_SECRET=${{ secrets.JWT_SECRET }}" >> .env
@@ -63,17 +66,16 @@ jobs:
             echo "GOOGLE_CLIENT_SECRET=${{ secrets.GOOGLE_CLIENT_SECRET }}" >> .env
             echo "NAVER_CLIENT_ID=${{ secrets.NAVER_CLIENT_ID }}" >> .env
             echo "NAVER_CLIENT_SECRET=${{ secrets.NAVER_CLIENT_SECRET }}" >> .env
-
-            # (3) Docker Hub 로그인 & 이미지 풀
+            
+            # (3) 로그인 & 풀
             sudo docker login -u ${{ secrets.DOCKERHUB_USERNAME }} -p ${{ secrets.DOCKERHUB_PASSWORD }}
             sudo docker pull ${{ secrets.DOCKERHUB_USERNAME }}/pc:${GITHUB_SHA::7}
-
-            # (4) 태그 매핑 (pc:latest로 맞춤)
             sudo docker tag ${{ secrets.DOCKERHUB_USERNAME }}/pc:${GITHUB_SHA::7} pc:latest
-
-            # (5) 컨테이너 실행 (자동으로 .env 파일 읽음)
-            sudo docker-compose up -d
-
-            # (6) 뒷정리
+            
+            # (4) 실행
+            # 🚨 [변경] docker-compose (하이픈) -> docker compose (공백)
+            # 🚨 [변경] -p pc 옵션 제거 (위의 .env 파일에서 자동으로 읽음)
+            sudo docker compose up -d
+            
+            # (5) 청소
             sudo docker image prune -f
-
