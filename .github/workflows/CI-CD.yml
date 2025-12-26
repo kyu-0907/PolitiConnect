@@ -47,4 +47,19 @@ jobs:
           docker build -t pc .
           docker tag pc ${{ secrets.DOCKERHUB_USERNAME }}/pc:${GITHUB_SHA::7}
           docker push ${{ secrets.DOCKERHUB_USERNAME }}/pc:${GITHUB_SHA::7}
+          
+
+      - name: Deploy
+        uses: appleboy/ssh-action@master
+        with:
+          host: 35.216.31.89          # 고정으로 바꿀거임 IP
+          username: ${{ secrets.SSH_USERNAME }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          # passphrase: 생략 가능 (키 생성 시 없음)
+          envs: GITHUB_SHA
+          script: |
+            sudo docker login -u ${{ secrets.DOCKERHUB_USERNAME }} -p ${{ secrets.DOCKERHUB_PASSWORD }}
+            sudo docker pull ${{ secrets.DOCKERHUB_USERNAME }}/pc:${GITHUB_SHA::7}
+            sudo docker tag ${{ secrets.DOCKERHUB_USERNAME }}/pc:${GITHUB_SHA::7} pc:latest
+            sudo docker-compose up -d
 
