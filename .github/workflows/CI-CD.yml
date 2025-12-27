@@ -56,6 +56,7 @@ jobs:
             echo "COMPOSE_PROJECT_NAME=pc" > .env
             
             # 나머지 변수들 (이어쓰기 >>)
+            echo "REDIS_PASSWORD=${{ secrets.REDIS_PASSWORD }}" >> .env
             echo "DB_URL=${{ secrets.DB_URL }}" >> .env
             echo "DB_USERNAME=${{ secrets.DB_USERNAME }}" >> .env
             echo "DB_PASSWORD=${{ secrets.DB_PASSWORD }}" >> .env
